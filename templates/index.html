@@ -1,0 +1,181 @@
+{% extends "import.html" %}
+{% block content %}
+
+<center>
+<br><h2>Klasifikasi penyakit tanaman terong</h2><br>
+
+<form id="upload-file" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" class="btn btn-success" id="imageUpload" accept="image/*">
+</form>
+<br>
+<button type="button" class="btn btn-secondary" id="btn-camera">Ambil dari Kamera</button>
+<button type="button" class="btn btn-info btn-lg" id="btn-predict" style="display:none;">Predict!</button>
+<button type="button" class="btn btn-warning" id="btn-upload-lain" style="display:none;">Upload Gambar Lain</button>
+
+<!-- WebRTC Camera Section -->
+<div id="camera-section" style="display:none;">
+    <video id="video" width="300" height="300" autoplay></video><br>
+    <button type="button" class="btn btn-danger" id="btn-capture">Ambil Foto</button>
+    <button type="button" class="btn btn-secondary" id="btn-close-camera">Tutup Kamera</button>
+    <canvas id="canvas" width="300" height="300" style="display:none;"></canvas>
+</div>
+
+<div class="image-section" style="display:none;">
+    <img id="imagePreview" class="img-responsive" src="#" style="width:300px;height:300px;"/><br><br>
+</div>
+
+<div class="loader" style="display:none;"></div>
+
+<h3 id="result">
+    <span> </span>
+</h3>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(function () {
+    let stream = null;
+
+    // Fungsi untuk mematikan kamera
+    function stopCamera() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        $("#camera-section").hide();
+    }
+
+    // Reset ke langkah awal
+    function resetAll() {
+        stopCamera();
+        $("#imageUpload").val('');
+        $('#result').html('<span> </span>');
+        $('.image-section').hide();
+        $('#imagePreview').attr('src', '#');
+        $("#canvas").removeData('captured');
+        $("#canvas").hide();
+        $("#btn-predict").hide();
+        $("#btn-upload-lain").hide();
+        $("#btn-camera").show();
+        $("#imageUpload").show();
+    }
+
+    // Preview gambar dari file
+    $("#imageUpload").change(function () {
+        if(this.files[0]) {
+            stopCamera();
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                $('#imagePreview').attr('src', e.target.result);
+                $('.image-section').show();
+                $('#result').html('<span> </span>');
+                $("#canvas").removeData('captured');
+                $("#canvas").hide();
+                $("#btn-predict").show();
+                $("#btn-upload-lain").hide();
+                $("#btn-camera").hide();
+                $("#imageUpload").hide();
+            }
+            reader.readAsDataURL(this.files[0]);
+        }
+    });
+
+    // Button kamera: buka kamera
+    $("#btn-camera").click(function () {
+        stopCamera();
+        $("#camera-section").show();
+        $('.image-section').hide(); // Sembunyikan preview gambar sebelumnya
+        $('#imagePreview').attr('src', '#'); // Reset src preview
+        $("#canvas").removeData('captured'); // Reset data canvas
+        $("#canvas").hide();
+        $('#result').html('<span> </span>');
+        $("#imageUpload").hide();
+        $("#btn-camera").hide();
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function (s) {
+                stream = s;
+                $("#video")[0].srcObject = stream;
+            })
+            .catch(function (err) {
+                alert("Tidak bisa mengakses kamera: " + err);
+                resetAll();
+            });
+    });
+
+    // Button tutup kamera
+    $("#btn-close-camera").click(function () {
+        stopCamera();
+        $("#btn-camera").show();
+        $("#imageUpload").show();
+    });
+    // Button capture: ambil foto dari video
+    $("#btn-capture").click(function () {
+        var video = $("#video")[0];
+        var canvas = $("#canvas")[0];
+        var context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        var dataURL = canvas.toDataURL('image/png');
+        $('#imagePreview').attr('src', dataURL);
+        $('.image-section').show();
+        stopCamera();
+        $('#result').html('<span> </span>');
+        $("#imageUpload").val('');
+        $("#canvas").show();
+        $("#canvas").data('captured', dataURL);
+        $("#btn-predict").show();
+        $("#btn-upload-lain").hide();
+        $("#btn-camera").hide();
+        $("#imageUpload").hide();
+    });
+
+    // Button upload gambar lain
+    $("#btn-upload-lain").click(function () {
+        resetAll();
+    });
+
+    // AJAX untuk prediksi
+    $("#btn-predict").click(function () {
+        var form_data = new FormData($('#upload-file')[0]);
+        var dataURL = $("#canvas").data('captured');
+        if (dataURL) {
+            function dataURLtoBlob(dataurl) {
+                var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+                    bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+                while (n--) {
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                return new Blob([u8arr], { type: mime });
+            }
+            var blob = dataURLtoBlob(dataURL);
+            form_data.set('file', blob, 'capture.png');
+        }
+        $(".loader").show();
+        $.ajax({
+            type: 'POST',
+            url: '/predict',
+            data: form_data,
+            contentType: false,
+            cache: false,
+            processData: false,
+            success: function (data) {
+                $(".loader").hide();
+                $('#result').html('<span>' + data + '</span>');
+                $("#btn-predict").hide();
+                $("#btn-upload-lain").show();
+                $("#btn-camera").hide();
+                $("#imageUpload").hide();
+                stopCamera();
+            },
+            error: function () {
+                $(".loader").hide();
+                $('#result').html('<span style="color:red;font-weight:bold;">Error dalam prediksi</span>');
+                stopCamera();
+            }
+        });
+    });
+
+    // Inisialisasi: reset ke langkah awal saat halaman dibuka
+    resetAll();
+});
+</script>
+
+</center><br><br>
+{% endblock %}
