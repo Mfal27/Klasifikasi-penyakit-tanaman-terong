@@ -1,5 +1,5 @@
 # Ignore virtual environment directories
-venv/
+.venv/
 
 # Ignore model.h5
 model_yang_selesai.h5
